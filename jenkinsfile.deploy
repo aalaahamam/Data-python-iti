@@ -1,13 +1,7 @@
-// Jenkinsfile for the ML Model Deployment Pipeline (CD)
-// This pipeline takes a trained model, builds a Docker image, and pushes it to a registry.
 
 pipeline {
-    // 1. Agent Configuration
-    // We need an agent with Docker installed.
     agent any
 
-    // 2. Parameters
-    // This makes the pipeline interactive. You can choose which build to deploy.
     parameters {
         // The name of the Jenkins job that runs the training pipeline.
         string(name: 'TRAINING_JOB_NAME', defaultValue: 'data-etl-iti', description: 'Name of the training pipeline Jenkins job.') // <-- تم التعديل
@@ -15,21 +9,15 @@ pipeline {
         string(name: 'TRAINING_BUILD_NUMBER', defaultValue: 'lastSuccessfulBuild', description: 'Build number to get the model from (e.g., "15" or "lastSuccessfulBuild").')
     }
 
-    // 3. Environment Variables
     environment {
-        // Your Docker Hub username.
         DOCKER_HUB_USERNAME = "aalaahamam16" 
-        // The name of the image on Docker Hub.
         DOCKER_IMAGE_NAME = "${DOCKER_HUB_USERNAME}/ml-serving-app"
-        // The ID for your Docker Hub credentials stored in Jenkins.
         DOCKER_CREDENTIALS_ID = "my-docker-id1" 
     }
 
-    // 4. Pipeline Stages
     stages {
 
         // STAGE 1: Download Model Artifact
-        // Pull the 'model.pkl' file from the specified training job build.
         stage('Download Model') {
             steps {
                 echo "--- Downloading model.pkl from Training Job: ${params.TRAINING_JOB_NAME}, Build: ${params.TRAINING_BUILD_NUMBER} ---"
@@ -43,7 +31,6 @@ pipeline {
         }
 
         // STAGE 2: Build Docker Image
-        // Build the serving image using the Dockerfile and the downloaded model.
         stage('Build Docker Image') {
             steps {
                 script {
@@ -54,8 +41,6 @@ pipeline {
             }
         }
 
-        // STAGE 3: Login & Push Docker Image
-        // Login to Docker Hub and push the image.
         stage('Login & Push Image') {
             steps {
                 script {
@@ -79,12 +64,9 @@ pipeline {
         }
     }
 
-    // 5. Post-build Actions
     post {
         always {
             echo "--- Deployment pipeline finished. Cleaning up. ---"
-            // Clean up the local Docker image from the Jenkins agent to save space.
-            // Use 'bat' for Windows
             bat "docker rmi ${env.DOCKER_IMAGE_NAME}:${params.TRAINING_BUILD_NUMBER}"
             bat "docker rmi ${env.DOCKER_IMAGE_NAME}:latest"
             cleanWs()
