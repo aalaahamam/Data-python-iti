@@ -1,5 +1,5 @@
 // Jenkinsfile for the ML Training Pipeline
-// This pipeline is structured to be compatible with Docker on Windows.
+// FINAL VERSION for Windows Docker compatibility
 
 pipeline {
     // 1. Use a generic agent for the main pipeline execution.
@@ -10,21 +10,24 @@ pipeline {
 
         // STAGE 1: Run all build and train steps inside a dedicated Docker container
         stage('Build and Train in Container') {
-            // This agent block applies ONLY to this stage, which is a more robust pattern for Windows.
+            // This agent block applies ONLY to this stage.
             agent {
                 docker {
                     image 'python:3.9-slim'
+                    // THIS IS THE CRITICAL FIX:
+                    // We are manually telling Docker how to map the Windows workspace path
+                    // to a path it can understand inside the container.
+                    args '-v ${WORKSPACE}:/app -w /app'
                 }
             }
             steps {
                 // We will run all python commands sequentially here inside the container.
                 
                 echo "--- 1. Setting up Python virtual environment ---"
-                // Use 'bat' for Windows commands. 'python' is the correct command in the container.
                 bat "python -m venv venv"
                 
                 echo "--- 2. Installing dependencies ---"
-                // Call pip from the venv directly using Windows path syntax.
+                // On Windows, the python executable is in 'Scripts'
                 bat "venv\\Scripts\\pip install --no-cache-dir -r requirements.txt"
                 
                 echo "--- 3. Running data loading and preprocessing ---"
@@ -44,6 +47,7 @@ pipeline {
     post {
         always {
             echo "--- Archiving the trained model file ---"
+            // We need to specify the full path for archiving when using this agent structure
             archiveArtifacts artifacts: 'model.pkl', fingerprint: true
             
             echo "--- Cleaning up workspace ---"
