@@ -8,6 +8,8 @@ pipeline {
     agent {
         docker {
             image 'python:3.9-slim'
+            args '-v C:/ProgramData/Jenkins/.jenkins/workspace:/var/jenkins_home/workspace' 
+
         }
     }
 
@@ -70,3 +72,4 @@ pipeline {
         }
     }
 }
+
