@@ -1,19 +1,23 @@
-// FINAL Jenkinsfile: Bypassing Docker entirely to run directly on the Windows agent.
+// FINAL Jenkinsfile: Bypassing all Jenkins tool configurations by defining the Python path directly.
 
 pipeline {
-    // Run directly on the node where Jenkins is installed.
     agent any
+
+    environment {
+        // IMPORTANT: Replace this path with the actual full path to your python.exe
+        PYTHON_EXE = 'C:\\Users\\AIS\\AppData\\Local\\Programs\\Python\\Python310\\python.exe' 
+                      
+    }
 
     stages {
         stage('Setup and Install Dependencies') {
             steps {
                 echo "--- 1. Cleaning previous virtual environment (if any) ---"
-                // Delete old venv to ensure a clean start
                 bat "if exist venv ( rmdir /s /q venv )"
 
                 echo "--- 2. Setting up Python virtual environment ---"
-                // Ensure you have Python installed on your Windows machine and available in PATH
-                bat "python -m venv venv"
+                // Use the full path to python.exe defined in the environment block
+                bat "\"${env.PYTHON_EXE}\" -m venv venv"
                 
                 echo "--- 3. Installing dependencies ---"
                 bat "venv\\Scripts\\pip install --no-cache-dir -r requirements.txt"
