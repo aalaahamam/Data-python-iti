@@ -1,10 +1,7 @@
-// FINAL Jenkinsfile: Bypassing all Jenkins tool configurations by defining the Python path directly.
-
 pipeline {
     agent any
 
     environment {
-        // IMPORTANT: Replace this path with the actual full path to your python.exe
         PYTHON_EXE = 'C:\\Users\\AIS\\AppData\\Local\\Programs\\Python\\Python310\\python.exe' 
                       
     }
@@ -48,3 +45,4 @@ pipeline {
         }
     }
 }
+
