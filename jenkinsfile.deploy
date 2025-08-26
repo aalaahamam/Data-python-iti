@@ -1,0 +1,92 @@
+// Jenkinsfile for the ML Model Deployment Pipeline (CD)
+// This pipeline takes a trained model, builds a Docker image, and pushes it to a registry.
+
+pipeline {
+    // 1. Agent Configuration
+    // We need an agent with Docker installed.
+    agent any
+
+    // 2. Parameters
+    // This makes the pipeline interactive. You can choose which build to deploy.
+    parameters {
+        // The name of the Jenkins job that runs the training pipeline.
+        string(name: 'TRAINING_JOB_NAME', defaultValue: 'your-training-pipeline-job-name', description: 'Name of the training pipeline Jenkins job.')
+        // The build number from which to pull the artifact. 'lastSuccessfulBuild' is a good default.
+        string(name: 'TRAINING_BUILD_NUMBER', defaultValue: 'lastSuccessfulBuild', description: 'Build number to get the model from (e.g., "15" or "lastSuccessfulBuild").')
+    }
+
+    // 3. Environment Variables
+    environment {
+        // Your Docker Hub username.
+        DOCKER_HUB_USERNAME = "aalaahamam16" // <-- غيّر دي
+        // The name of the image on Docker Hub.
+        DOCKER_IMAGE_NAME = "${DOCKER_HUB_USERNAME}/ml-serving-app"
+        // The ID for your Docker Hub credentials stored in Jenkins.
+        DOCKER_CREDENTIALS_ID = "my-docker-id1" // <-- غيّر دي
+    }
+
+    // 4. Pipeline Stages
+    stages {
+
+        // STAGE 1: Download Model Artifact
+        // Pull the 'model.pkl' file from the specified training job build.
+        stage('Download Model') {
+            steps {
+                echo "--- Downloading model.pkl from Training Job: ${params.TRAINING_JOB_NAME}, Build: ${params.TRAINING_BUILD_NUMBER} ---"
+                copyArtifacts(
+                    projectName: params.TRAINING_JOB_NAME,
+                    selector: specific(params.TRAINING_BUILD_NUMBER),
+                    target: '.', // Download to the current workspace
+                    filter: 'model.pkl' // Only copy this file
+                )
+            }
+        }
+
+        // STAGE 2: Build Docker Image
+        // Build the serving image using the Dockerfile and the downloaded model.
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo "--- Building Docker image: ${env.DOCKER_IMAGE_NAME} ---"
+                    // We will tag the image with the build number of the *training* job for traceability.
+                    docker.build("${env.DOCKER_IMAGE_NAME}:${params.TRAINING_BUILD_NUMBER}", ".")
+                }
+            }
+        }
+
+        // STAGE 3: Login & Push Docker Image
+        // Login to Docker Hub and push the image.
+        stage('Login & Push Image') {
+            steps {
+                script {
+                    echo "--- Logging in to Docker Hub and pushing the image ---"
+                    // Use 'withRegistry' for secure authentication.
+                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_CREDENTIALS_ID ) {
+                        
+                        def imageWithBuildTag = docker.image("${env.DOCKER_IMAGE_NAME}:${params.TRAINING_BUILD_NUMBER}")
+                        
+                        // Push the image with the specific build number tag.
+                        echo "Pushing tag: ${params.TRAINING_BUILD_NUMBER}"
+                        imageWithBuildTag.push()
+
+                        // Also, tag the same image as 'latest' and push it.
+                        echo "Pushing tag: latest"
+                        imageWithBuildTag.push('latest')
+                    }
+                    echo "--- Image pushed successfully to Docker Hub! ---"
+                }
+            }
+        }
+    }
+
+    // 5. Post-build Actions
+    post {
+        always {
+            echo "--- Deployment pipeline finished. Cleaning up. ---"
+            // Clean up the local Docker image from the Jenkins agent to save space.
+            sh "docker rmi ${env.DOCKER_IMAGE_NAME}:${params.TRAINING_BUILD_NUMBER}"
+            sh "docker rmi ${env.DOCKER_IMAGE_NAME}:latest"
+            cleanWs()
+        }
+    }
+}
