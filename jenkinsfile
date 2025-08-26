@@ -1,0 +1,72 @@
+// Jenkinsfile for the ML Training Pipeline
+// This pipeline trains the model and archives the result (.pkl file).
+
+pipeline {
+    // 1. Agent Configuration
+    // Run all steps inside a clean Python 3.9 Docker container.
+    // This ensures a consistent and reproducible environment.
+    agent {
+        docker {
+            image 'python:3.9-slim'
+        }
+    }
+
+    // 2. Pipeline Stages
+    stages {
+
+        // STAGE 1: Setup Environment
+        // Create a virtual environment and install all required packages.
+        stage('Setup Environment') {
+            steps {
+                echo "--- Setting up Python virtual environment ---"
+                sh "python3 -m venv venv"
+                
+                echo "--- Installing dependencies from requirements.txt ---"
+                // Activate the venv and install packages in the same shell session.
+                sh ". venv/bin/activate && pip install --no-cache-dir -r requirements.txt"
+            }
+        }
+
+        // STAGE 2: Data Loading and Preprocessing
+        // This script loads the raw data and saves the processed version.
+        stage('Load and Preprocess Data') {
+            steps {
+                echo "--- Running data loading and preprocessing ---"
+                // Use the python from our virtual environment.
+                sh ". venv/bin/activate && python3 data_loading.py"
+            }
+        }
+
+        // STAGE 3: Model Training
+        // This script loads the preprocessed data and trains the model, saving it to 'model.pkl'.
+        stage('Train Model') {
+            steps {
+                echo "--- Starting model training ---"
+                sh ". venv/bin/activate && python3 model_training.py"
+            }
+        }
+
+        // STAGE 4: Model Evaluation
+        // This script evaluates the newly trained model and prints the results.
+        stage('Evaluate Model') {
+            steps {
+                echo "--- Evaluating the trained model ---"
+                sh ". venv/bin/activate && python3 model_evaluation.py"
+            }
+        }
+    }
+
+    // 3. Post-build Actions
+    // These actions run after all stages are completed.
+    post {
+        always {
+            echo "--- Archiving the trained model file ---"
+            // Archive the final model file. The name 'model.pkl' is taken directly from your model_training.py script.
+            archiveArtifacts artifacts: 'model.pkl', fingerprint: true
+            
+            echo "--- Cleaning up workspace ---"
+            // Requires the Workspace Cleanup plugin.
+            cleanWs()
+        }
+    }
+}
