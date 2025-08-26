@@ -1,57 +1,42 @@
-// Jenkinsfile for the ML Training Pipeline
-// FINAL VERSION for Windows Docker compatibility
+// FINAL Jenkinsfile: Switching to Scripted Pipeline for full control on Windows
 
-pipeline {
-    // 1. Use a generic agent for the main pipeline execution.
-    agent any
+node {
+    // Define the workspace on the node
+    stage('Checkout') {
+        // Clean workspace before checkout
+        cleanWs()
+        // Checkout the source code from Git
+        checkout scm
+    }
 
-    // 2. Define stages
-    stages {
+    // Define the Docker image we want to use
+    def customImage = docker.image('python:3.9-slim')
 
-        // STAGE 1: Run all build and train steps inside a dedicated Docker container
-        stage('Build and Train in Container') {
-            // This agent block applies ONLY to this stage.
-            agent {
-                docker {
-                    image 'python:3.9-slim'
-                    // THIS IS THE CRITICAL FIX:
-                    // We are manually telling Docker how to map the Windows workspace path
-                    // to a path it can understand inside the container.
-                    args '-v ${WORKSPACE}:/app -w /app'
-                }
-            }
-            steps {
-                // We will run all python commands sequentially here inside the container.
-                
-                echo "--- 1. Setting up Python virtual environment ---"
-                bat "python -m venv venv"
-                
-                echo "--- 2. Installing dependencies ---"
-                // On Windows, the python executable is in 'Scripts'
-                bat "venv\\Scripts\\pip install --no-cache-dir -r requirements.txt"
-                
-                echo "--- 3. Running data loading and preprocessing ---"
-                bat "venv\\Scripts\\python data_loading.py"
-                
-                echo "--- 4. Starting model training ---"
-                bat "venv\\Scripts\\python model_training.py"
+    // Run the main logic inside the container
+    customImage.inside {
+        stage('Install Dependencies') {
+            echo "--- 1. Setting up Python virtual environment ---"
+            bat "python -m venv venv"
+            
+            echo "--- 2. Installing dependencies ---"
+            bat "venv\\Scripts\\pip install --no-cache-dir -r requirements.txt"
+        }
 
-                echo "--- 5. Evaluating the trained model ---"
-                bat "venv\\Scripts\\python model_evaluation.py"
-            }
+        stage('Train and Evaluate') {
+            echo "--- 3. Running data loading and preprocessing ---"
+            bat "venv\\Scripts\\python data_loading.py"
+            
+            echo "--- 4. Starting model training ---"
+            bat "venv\\Scripts\\python model_training.py"
+
+            echo "--- 5. Evaluating the trained model ---"
+            bat "venv\\Scripts\\python model_evaluation.py"
         }
     }
 
-    // 3. Post-build Actions
-    // This section runs on the main agent after the container stage is complete.
-    post {
-        always {
-            echo "--- Archiving the trained model file ---"
-            // We need to specify the full path for archiving when using this agent structure
-            archiveArtifacts artifacts: 'model.pkl', fingerprint: true
-            
-            echo "--- Cleaning up workspace ---"
-            cleanWs()
-        }
+    // This stage runs back on the Jenkins node (outside the container)
+    stage('Archive Artifacts') {
+        echo "--- Archiving the trained model file ---"
+        archiveArtifacts artifacts: 'model.pkl', fingerprint: true
     }
 }
