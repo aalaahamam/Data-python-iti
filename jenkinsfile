@@ -1,42 +1,46 @@
-// FINAL Jenkinsfile: Switching to Scripted Pipeline for full control on Windows
+// FINAL Jenkinsfile: Bypassing Docker entirely to run directly on the Windows agent.
 
-node {
-    // Define the workspace on the node
-    stage('Checkout') {
-        // Clean workspace before checkout
-        cleanWs()
-        // Checkout the source code from Git
-        checkout scm
-    }
+pipeline {
+    // Run directly on the node where Jenkins is installed.
+    agent any
 
-    // Define the Docker image we want to use
-    def customImage = docker.image('python:3.9-slim')
+    stages {
+        stage('Setup and Install Dependencies') {
+            steps {
+                echo "--- 1. Cleaning previous virtual environment (if any) ---"
+                // Delete old venv to ensure a clean start
+                bat "if exist venv ( rmdir /s /q venv )"
 
-    // Run the main logic inside the container
-    customImage.inside {
-        stage('Install Dependencies') {
-            echo "--- 1. Setting up Python virtual environment ---"
-            bat "python -m venv venv"
-            
-            echo "--- 2. Installing dependencies ---"
-            bat "venv\\Scripts\\pip install --no-cache-dir -r requirements.txt"
+                echo "--- 2. Setting up Python virtual environment ---"
+                // Ensure you have Python installed on your Windows machine and available in PATH
+                bat "python -m venv venv"
+                
+                echo "--- 3. Installing dependencies ---"
+                bat "venv\\Scripts\\pip install --no-cache-dir -r requirements.txt"
+            }
         }
 
         stage('Train and Evaluate') {
-            echo "--- 3. Running data loading and preprocessing ---"
-            bat "venv\\Scripts\\python data_loading.py"
-            
-            echo "--- 4. Starting model training ---"
-            bat "venv\\Scripts\\python model_training.py"
+            steps {
+                echo "--- 4. Running data loading and preprocessing ---"
+                bat "venv\\Scripts\\python data_loading.py"
+                
+                echo "--- 5. Starting model training ---"
+                bat "venv\\Scripts\\python model_training.py"
 
-            echo "--- 5. Evaluating the trained model ---"
-            bat "venv\\Scripts\\python model_evaluation.py"
+                echo "--- 6. Evaluating the trained model ---"
+                bat "venv\\Scripts\\python model_evaluation.py"
+            }
         }
     }
 
-    // This stage runs back on the Jenkins node (outside the container)
-    stage('Archive Artifacts') {
-        echo "--- Archiving the trained model file ---"
-        archiveArtifacts artifacts: 'model.pkl', fingerprint: true
+    post {
+        always {
+            echo "--- Archiving the trained model file ---"
+            archiveArtifacts artifacts: 'model.pkl', fingerprint: true
+            
+            echo "--- Cleaning up workspace ---"
+            cleanWs()
+        }
     }
 }
